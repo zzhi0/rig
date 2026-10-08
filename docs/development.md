@@ -25,7 +25,7 @@
 
 自动格式化使用 `cargo fmt --all` 和 `npm run format --prefix web`。Rust 构建与测试可独立执行，无需 Node 或前端静态资源。
 
-首次克隆或锁文件更新后，先执行 `npm ci --prefix web`，再运行完整工程检查。集成检查启动 `target/debug/rig`，使用测试端口 `17878` 和构建后的绝对静态目录，验证应用信息、HTML 与引用的 JavaScript/CSS 资源；检查完成后停止服务。运行时请确保该测试端口空闲。脚本不验证浏览器中的实际组件渲染，修改 UI 后还需在浏览器查看。
+首次克隆或锁文件更新后，先执行 `npm ci --prefix web`，再运行完整工程检查。集成检查启动 `target/debug/rig`，使用操作系统分配的端口和构建后的绝对静态目录，从本次子进程读取监听地址，验证应用信息、HTML 与引用的 JavaScript/CSS 资源；检查完成后发送 SIGINT 并验证正常退出。脚本不验证浏览器中的实际组件渲染，修改 UI 后还需在浏览器查看。
 
 本地使用与前端开发的启动命令见 [README](../README.md)。`serve` 默认从当前工作目录下的 `web/dist` 提供静态文件。开发模式使用 Vite 的 API 代理；构建模式由 Rust 直接提供页面。
 
