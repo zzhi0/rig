@@ -69,6 +69,7 @@ async fn execute(cli: Cli) -> io::Result<ExitCode> {
         Command::Login => {
             let auth = ChatGptAuth::new().map_err(io::Error::other)?;
             account_command(async {
+                eprintln!("Continue with ChatGPT in your browser. Press Ctrl-C to cancel.");
                 let identity = auth.login().await?;
                 println!("Signed in with ChatGPT: {identity}");
                 Ok(())
