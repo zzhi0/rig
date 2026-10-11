@@ -29,6 +29,12 @@
 
 本地使用与前端开发的启动命令见 [README](../README.md)。`serve` 默认从当前工作目录下的 `web/dist` 提供静态文件。开发模式使用 Vite 的 API 代理；构建模式由 Rust 直接提供页面。
 
+## Runtime 验收
+
+机制与当前范围见 [Runtime](runtime.md)。`cargo test --all-targets --locked` 包含确定性 Loop 测试、本地 HTTP 模型适配测试、真实临时文件工具测试及 CLI 测试，无需 key 或外网；前端仍按现有工程验收。
+
+真实模型验证按 [README](../README.md) 配置仓库外的 key：先检查无工具的回答，再明确要求使用 `read_file` 读取一个提供的文件，确认 stderr 出现工具进展、最终答案使用文件内容。用 Ctrl-C 确认取消及退出码 `130`。不要把 key、真实请求日志或临时输入文件提交到仓库。
+
 ## 初始化验收
 
 - 新克隆仓库按文档安装依赖后，可以运行完整工程检查。

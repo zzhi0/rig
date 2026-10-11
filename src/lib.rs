@@ -4,3 +4,4 @@ pub mod application;
 pub mod deepseek;
 pub mod http;
 pub mod runtime;
+pub mod tools;
