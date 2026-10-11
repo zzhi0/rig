@@ -88,10 +88,9 @@ pub async fn run(
 ) -> RunReport {
     let definitions = tools.definitions();
     let mut context = vec![Message::User(prompt)];
-    let mut call_ids = HashSet::new();
     tokio::pin!(cancellation);
 
-    let outcome = loop {
+    let outcome = 'execution: loop {
         let response = tokio::select! {
             biased;
             () = &mut cancellation => break RunOutcome::Cancelled,
@@ -107,6 +106,7 @@ pub async fn run(
         emit(RunEvent::ModelFinished(&response));
 
         // 在执行整批调用前检查关联 ID，避免产生无法关联的结果。
+        let mut call_ids = HashSet::new();
         if response
             .tool_calls
             .iter()
@@ -122,14 +122,10 @@ pub async fn run(
             };
         }
 
-        let mut cancelled = false;
         for call in &response.tool_calls {
             let result = tokio::select! {
                 biased;
-                () = &mut cancellation => {
-                    cancelled = true;
-                    break;
-                },
+                () = &mut cancellation => break 'execution RunOutcome::Cancelled,
                 result = async {
                     emit(RunEvent::ToolStarted(call));
                     if !definitions.iter().any(|tool| tool.name == call.name) {
@@ -152,9 +148,6 @@ pub async fn run(
             };
             emit(RunEvent::ToolFinished(&result));
             context.push(Message::Tool(result));
-        }
-        if cancelled {
-            break RunOutcome::Cancelled;
         }
     };
 
