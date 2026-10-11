@@ -30,6 +30,8 @@ impl ScriptedModel {
 }
 
 impl Model for ScriptedModel {
+    type Continuation = ();
+
     async fn complete(
         &self,
         messages: &[Message],
@@ -81,6 +83,7 @@ fn call(id: &str, arguments: &str) -> ToolCall {
 
 fn response(content: Option<&str>, tool_calls: Vec<ToolCall>) -> AssistantMessage {
     AssistantMessage {
+        continuation: (),
         content: content.map(str::to_owned),
         tool_calls,
     }
@@ -301,6 +304,8 @@ impl PendingOperation {
 }
 
 impl Model for PendingOperation {
+    type Continuation = ();
+
     async fn complete(
         &self,
         _: &[Message],

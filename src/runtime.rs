@@ -5,16 +5,18 @@ use std::{collections::HashSet, future::Future};
 use serde_json::Value;
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Message {
+pub enum Message<C = ()> {
     User(String),
-    Assistant(AssistantMessage),
+    Assistant(AssistantMessage<C>),
     Tool(ToolResult),
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct AssistantMessage {
+pub struct AssistantMessage<C = ()> {
     pub content: Option<String>,
     pub tool_calls: Vec<ToolCall>,
+    /// 由适配器解释的续接数据；Loop 原样保留并回传。
+    pub continuation: C,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -41,11 +43,13 @@ pub struct ToolDefinition {
 
 /// 适配器只返回完整响应；网络或协议错误结束本次运行。
 pub trait Model {
+    type Continuation: Clone + Send + Sync;
+
     fn complete(
         &self,
-        messages: &[Message],
+        messages: &[Message<Self::Continuation>],
         tools: &[ToolDefinition],
-    ) -> impl Future<Output = Result<AssistantMessage, String>> + Send;
+    ) -> impl Future<Output = Result<AssistantMessage<Self::Continuation>, String>> + Send;
 }
 
 /// 只发布当前实际可执行的工具。工具错误作为调用结果回传模型。
@@ -62,16 +66,16 @@ pub enum RunOutcome {
 }
 
 #[derive(Debug)]
-pub struct RunReport {
+pub struct RunReport<C = ()> {
     pub outcome: RunOutcome,
     /// 本次运行的模型上下文，供检查；不是会话历史或恢复日志。
-    pub context: Vec<Message>,
+    pub context: Vec<Message<C>>,
 }
 
 #[derive(Debug)]
-pub enum RunEvent<'a> {
+pub enum RunEvent<'a, C = ()> {
     ModelStarted,
-    ModelFinished(&'a AssistantMessage),
+    ModelFinished(&'a AssistantMessage<C>),
     ToolStarted(&'a ToolCall),
     ToolFinished(&'a ToolResult),
     Finished(&'a RunOutcome),
@@ -79,13 +83,13 @@ pub enum RunEvent<'a> {
 
 /// 按模型给出的顺序执行工具。取消会丢弃正在等待的 future，停止后续工作。
 /// 工具须支持这种取消方式；本版工具只读，不承诺回滚副作用或停止远端推理。
-pub async fn run(
-    model: &impl Model,
+pub async fn run<M: Model>(
+    model: &M,
     tools: &impl Tools,
     prompt: String,
     cancellation: impl Future<Output = ()>,
-    mut emit: impl FnMut(RunEvent<'_>),
-) -> RunReport {
+    mut emit: impl FnMut(RunEvent<'_, M::Continuation>),
+) -> RunReport<M::Continuation> {
     let definitions = tools.definitions();
     let mut context = vec![Message::User(prompt)];
     tokio::pin!(cancellation);

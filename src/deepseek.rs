@@ -83,6 +83,8 @@ impl DeepSeek {
 }
 
 impl Model for DeepSeek {
+    type Continuation = ();
+
     async fn complete(
         &self,
         messages: &[Message],
@@ -186,6 +188,7 @@ impl ChatResponse {
             })
             .collect::<Result<_, String>>()?;
         Ok(AssistantMessage {
+            continuation: (),
             content: choice.message.content,
             tool_calls,
         })
