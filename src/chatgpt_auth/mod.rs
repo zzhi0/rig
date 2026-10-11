@@ -115,6 +115,7 @@ impl ChatGptAuth {
             ],
         )
         .await?;
+        let received_at = unix_time()?;
         let id_token = tokens
             .id_token
             .as_deref()
@@ -132,7 +133,7 @@ impl ChatGptAuth {
         let label = identity.email.as_ref().unwrap_or(&identity.sub).clone();
         registration.subject = Some(identity.sub);
         registration.email = identity.email;
-        registration.credentials = Some(credentials(tokens, None)?);
+        registration.credentials = Some(credentials(tokens, None, received_at)?);
         self.storage.save(state)?;
         Ok(label)
     }
@@ -176,6 +177,7 @@ impl ChatGptAuth {
             ],
         )
         .await?;
+        let received_at = unix_time()?;
         if let Some(id_token) = tokens.id_token.as_deref() {
             let discovery = discover(&self.client, discovery_endpoint).await?;
             validate_identity(
@@ -188,7 +190,7 @@ impl ChatGptAuth {
             )
             .await?;
         }
-        let updated = credentials(tokens, Some(&saved.id_token))?;
+        let updated = credentials(tokens, Some(&saved.id_token), received_at)?;
         let token = updated.access_token.clone();
         registration.credentials = Some(updated);
         self.storage.save(state)?;
@@ -239,6 +241,7 @@ impl ChatGptAuth {
 fn credentials(
     tokens: oauth::TokenResponse,
     previous_id_token: Option<&str>,
+    received_at: u64,
 ) -> Result<Credentials, String> {
     Ok(Credentials {
         access_token: tokens.access_token,
@@ -247,7 +250,7 @@ fn credentials(
             .id_token
             .or_else(|| previous_id_token.map(str::to_owned))
             .ok_or("ChatGPT login did not return an identity token")?,
-        expires_at: unix_time()? + tokens.expires_in,
+        expires_at: received_at + tokens.expires_in,
         scopes: tokens.scope.split_whitespace().map(str::to_owned).collect(),
     })
 }

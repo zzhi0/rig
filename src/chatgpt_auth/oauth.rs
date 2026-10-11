@@ -3,13 +3,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use axum::{Router, extract::Query, routing::get};
+use axum::{Router, extract::Query, routing::get, serve::Listener};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header, jwk::JwkSet};
 use reqwest::{Client, Url};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use tokio::{net::TcpListener, sync::oneshot};
+use tokio::sync::oneshot;
 
 pub(super) const ISSUER: &str = "https://auth.openai.com";
 pub(super) const RESOURCE: &str = "https://api.openai.com/v1";
@@ -103,7 +103,9 @@ pub(super) struct Callback {
     pub error: Option<String>,
 }
 
-pub(super) async fn receive_callback(listener: TcpListener) -> Result<Callback, String> {
+pub(super) async fn receive_callback(
+    listener: impl Listener<Addr = std::net::SocketAddr>,
+) -> Result<Callback, String> {
     let (sender, receiver) = oneshot::channel();
     let sender = Arc::new(Mutex::new(Some(sender)));
     let router = Router::new().route(

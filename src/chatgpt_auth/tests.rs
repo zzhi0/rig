@@ -1,5 +1,9 @@
 use super::*;
 use std::collections::HashMap;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use axum::{
     Json, Router,
@@ -12,6 +16,30 @@ use jsonwebtoken::{Algorithm, EncodingKey, Header, encode, jwk::JwkSet};
 use serde_json::{Value, json};
 use sha2::Digest;
 use tokio::sync::oneshot;
+
+struct TrackedListener {
+    inner: TcpListener,
+    dropped: Arc<AtomicBool>,
+}
+
+impl axum::serve::Listener for TrackedListener {
+    type Io = tokio::net::TcpStream;
+    type Addr = std::net::SocketAddr;
+
+    async fn accept(&mut self) -> (Self::Io, Self::Addr) {
+        axum::serve::Listener::accept(&mut self.inner).await
+    }
+
+    fn local_addr(&self) -> std::io::Result<Self::Addr> {
+        self.inner.local_addr()
+    }
+}
+
+impl Drop for TrackedListener {
+    fn drop(&mut self) {
+        self.dropped.store(true, Ordering::SeqCst);
+    }
+}
 
 fn auth(directory: &tempfile::TempDir) -> ChatGptAuth {
     ChatGptAuth {
@@ -40,6 +68,13 @@ fn state() -> State {
 
 fn token_response(scope: &str) -> Value {
     json!({"access_token":"new-access", "refresh_token":"new-refresh", "token_type":"Bearer", "expires_in":3600, "scope":scope})
+}
+
+#[test]
+fn token_expiry_uses_receipt_time_before_identity_validation() {
+    let tokens = serde_json::from_value(token_response(oauth::DIRECT_SCOPE)).unwrap();
+    let saved = credentials(tokens, Some("saved-id"), 1234).unwrap();
+    assert_eq!(saved.expires_at, 4834);
 }
 
 async fn server(router: Router) -> (String, tokio::task::JoinHandle<()>) {
@@ -192,7 +227,11 @@ fn callback_requires_matching_state_and_issued_client() {
 async fn callback_completes_browser_response_and_releases_listener() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    let callback = oauth::receive_callback(listener);
+    let dropped = Arc::new(AtomicBool::new(false));
+    let callback = oauth::receive_callback(TrackedListener {
+        inner: listener,
+        dropped: dropped.clone(),
+    });
     let browser = async {
         let response = Client::new()
             .get(format!(
@@ -205,18 +244,21 @@ async fn callback_completes_browser_response_and_releases_listener() {
     };
     let (callback, ()) = tokio::join!(callback, browser);
     assert_eq!(callback.unwrap().state.as_deref(), Some("test"));
-    assert!(TcpListener::bind(address).await.is_ok());
+    assert!(dropped.load(Ordering::SeqCst));
 }
 
 #[tokio::test]
 async fn cancelling_callback_releases_listener_without_a_background_server() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let callback = tokio::spawn(oauth::receive_callback(listener));
+    let dropped = Arc::new(AtomicBool::new(false));
+    let callback = tokio::spawn(oauth::receive_callback(TrackedListener {
+        inner: listener,
+        dropped: dropped.clone(),
+    }));
     tokio::task::yield_now().await;
     callback.abort();
     assert!(callback.await.err().unwrap().is_cancelled());
-    assert!(TcpListener::bind(address).await.is_ok());
+    assert!(dropped.load(Ordering::SeqCst));
 }
 
 #[tokio::test]
