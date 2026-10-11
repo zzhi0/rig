@@ -2,6 +2,7 @@
 
 pub mod application;
 pub mod chatgpt;
+pub mod chatgpt_auth;
 pub mod http;
 pub mod runtime;
 pub mod tools;
