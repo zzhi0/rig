@@ -39,7 +39,6 @@ fn account_commands_without_credentials_do_not_use_ambient_keys() {
             .env("HOME", directory.path())
             .env_remove("XDG_CONFIG_HOME")
             .env("OPENAI_API_KEY", "unused-api-key")
-            .env("DEEPSEEK_API_KEY", "unused-deepseek-key")
             .output()
             .unwrap();
         assert!(!output.status.success());
