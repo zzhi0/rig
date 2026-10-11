@@ -58,7 +58,7 @@ npm run dev --prefix web
 
 打开 <http://127.0.0.1:5173/>。Vite 将 API 请求代理到 Rust 服务，提供前端即时更新。
 
-完整工程检查：
+阶段性或 review 后准备合并时运行完整工程检查；开发中按改动范围验证，避免频繁编译和全量测试，不依赖 CI：
 
 ```sh
 npm ci --prefix web

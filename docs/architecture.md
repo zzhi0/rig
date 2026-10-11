@@ -24,7 +24,7 @@ Rig 是本地运行、面向个人使用的 Agent harness。CLI 承担启动和�
 | `web/src/application/store.ts` | 不依赖 React 的客户端状态与订阅 |
 | `web/src/ui/App.tsx` | 通过 React `useSyncExternalStore` 订阅并渲染状态 |
 | `web/src/main.tsx` | 创建客户端状态实例、触发首次读取并挂载 UI |
-| `scripts/` 与 `.github/workflows/` | 本地工程检查与 CI |
+| `scripts/` | 本地工程检查 |
 | `docs/` | 当前有效设计和开发规范 |
 
 Rust 使用 Tokio 与 Axum：Tokio 提供异步运行时，Axum 将 HTTP 请求映射到应用能力。采用一个 Cargo package，减少早期 crate 间接口与发布管理成本；有实际独立复用或发布需求后再考虑拆分。
