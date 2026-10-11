@@ -81,7 +81,7 @@ Runtime 在执行整批工具前检查调用 ID 非空且在本批内唯一；�
 
 `models` 读取已登录账户的可见模型 ID，`run --model MODEL` 明确选择；列表本身不保证一次请求一定获准，成功完成请求才验证该次访问。请求使用 `store: false`、`stream: true`，由客户端提供本次完整上下文，不使用远端 conversation 或 `previous_response_id`。工具定义放在 `rig` namespace 中，调用结果按 `call_id` 关联。
 
-适配器接收 SSE，只有收到成功的 `response.completed` 才向 Loop 返回文本和完整工具调用；流中失败、未完成或意外断开均结束本次执行，不执行半截工具调用。Responses 的输出项留作续接数据，包含加密推理内容，下一轮与工具结果一起回传。暂不把 token 增量提供给 CLI 或 Web UI。HTTP 客户端关闭自动重试和重定向，不引入自定义超时策略。
+适配器接收 SSE，按 `output_index` 收集 `response.output_item.done` 的完整输出项，只有收到成功的 `response.completed` 才向 Loop 返回文本和完整工具调用；流中失败、未完成或意外断开均结束本次执行，不执行半截工具调用。Responses 的输出项留作续接数据，包含加密推理内容，下一轮与工具结果一起回传。暂不把 token 增量提供给 CLI 或 Web UI。HTTP 客户端关闭自动重试和重定向，不引入自定义超时策略。
 
 登录凭据的保存只解决账号授权和 token 刷新，不提供任务持久化、运行恢复或对 ChatGPT 会话和记忆的访问。刷新已在服务端生效、但本地凭据尚未保存时，如果进程退出、取消或后续身份验证失败，可能需要重新 `login`；本版不引入凭据恢复日志。
 
@@ -107,6 +107,6 @@ Runtime 在执行整批工具前检查调用 ID 非空且在本批内唯一；�
 资料核实日期：2026-10-12。
 
 - [ChatGPT 官方登录协议](https://developers.openai.com/siwc/token-sharing-open-source/sign-in)、[凭据与刷新](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions)：动态注册、PKCE、身份验证、授权范围与凭据管理。
-- [模型调用](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)、[预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)、[推理上下文](https://developers.openai.com/api/docs/guides/reasoning)：官方地址、流式终止、工具格式及无远端存储的上下文回传。
+- [模型调用](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)、[预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)、[推理上下文](https://developers.openai.com/api/docs/guides/reasoning)、[流式事件](https://developers.openai.com/api/reference/resources/responses/streaming-events)：官方地址、输出项与流式终止、工具格式及无远端存储的上下文回传。
 - [Pi 执行循环](https://github.com/earendil-works/pi/blob/ce950d78f424dcaf9f5d6a03ce80ab141130eb1d/packages/agent/src/agent-loop.ts)：直接推进模型和工具的参考。本版没有采用其运行中消息、扩展和会话机制。
 - [DSH 工具调度](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15009ae1756c3afe0ae0cef1faafc290ccc/packages/core/agent-loop/src/tool-calls.ts)：工具结果与调度边界的参考。本版采用顺序执行。

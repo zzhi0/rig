@@ -1,5 +1,7 @@
 //! ChatGPT plan access through the public Responses API.
 
+use std::collections::BTreeMap;
+
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
 use serde::Deserialize;
@@ -149,14 +151,26 @@ async fn send_response(
         .await
         .map_err(|error| format!("ChatGPT request failed: {error}"))?;
     let mut events = checked(response).await?.bytes_stream().eventsource();
+    let mut output = BTreeMap::new();
     while let Some(event) = events.next().await {
         let event = event.map_err(|_| "cannot read ChatGPT response stream")?;
         let event: Value = serde_json::from_str(&event.data)
             .map_err(|error| format!("invalid ChatGPT response event: {error}"))?;
         match event["type"].as_str() {
+            Some("response.output_item.done") => {
+                #[derive(Deserialize)]
+                struct DoneItem {
+                    output_index: usize,
+                    item: Value,
+                }
+                let item: DoneItem = serde_json::from_value(event)
+                    .map_err(|error| format!("invalid completed ChatGPT output item: {error}"))?;
+                output.insert(item.output_index, item.item);
+            }
             Some("response.completed") => {
-                let response: Response = serde_json::from_value(event["response"].clone())
+                let mut response: Response = serde_json::from_value(event["response"].clone())
                     .map_err(|error| format!("invalid completed ChatGPT response: {error}"))?;
+                response.output = output.into_values().collect();
                 return response.into_message();
             }
             Some("response.failed") => {
@@ -387,8 +401,10 @@ mod tests {
         }
     }
 
-    fn completed(output: Vec<Value>) -> Value {
-        json!({"type": "response.completed", "response": {"status": "completed", "output": output}})
+    fn completed(output: Vec<Value>) -> Vec<Value> {
+        output.into_iter().enumerate().map(|(output_index, item)| {
+            json!({"type": "response.output_item.done", "output_index": output_index, "item": item})
+        }).chain([json!({"type": "response.completed", "response": {"status": "completed", "output": []}})]).collect()
     }
 
     fn answer(text: &str) -> Value {
@@ -412,10 +428,11 @@ mod tests {
 
     #[tokio::test]
     async fn collects_completed_response_across_byte_fragments() {
-        let mut fixture = stream([
-            json!({"type": "response.output_text.delta", "delta": "partial"}),
-            completed(vec![answer("A UTF-8 answer: 中文")]),
-        ]);
+        let mut fixture = stream(
+            [json!({"type": "response.output_text.delta", "delta": "partial"})]
+                .into_iter()
+                .chain(completed(vec![answer("A UTF-8 answer: 中文")])),
+        );
         fixture.chunks = fixture.chunks[0].iter().map(|byte| vec![*byte]).collect();
         let (url, state, task) = server([fixture]).await;
         let response = send_response(
@@ -456,9 +473,11 @@ mod tests {
             "status": "completed",
         });
         let first_output = vec![reasoning.clone(), commentary.clone(), call.clone()];
+        let mut first_events = completed(first_output.clone());
+        first_events.swap(0, 2);
         let (url, state, task) = server([
-            stream([completed(first_output.clone())]),
-            stream([completed(vec![answer("done")])]),
+            stream(first_events),
+            stream(completed(vec![answer("done")])),
         ])
         .await;
         let client = client().unwrap();
@@ -551,7 +570,7 @@ mod tests {
             ]),
             stream([
                 json!({"type": "response.output_text.delta", "delta": "partial answer"}),
-                json!({"type": "response.output_item.done", "item": {
+                json!({"type": "response.output_item.done", "output_index": 0, "item": {
                     "type": "function_call", "namespace": "rig", "call_id": "call-1",
                     "name": "read_file", "arguments": "{}", "status": "completed",
                 }}),
