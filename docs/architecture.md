@@ -4,7 +4,7 @@
 
 Rig 是本地运行、面向个人使用的 Agent harness。CLI 承担启动和管理，Web UI 是首个完整交互入口。首批用户偏开发者，但内核保持任务中立，不内置编程任务的假设；通用个人任务与开发任务的工具组合、profile 或 mode，在真实需求出现后设计。
 
-当前阶段只交付可构建、可检查、可继续开发的工程基础。页面从真实 HTTP API 读取应用信息，验证前后端连接。尚未实现模型调用、Agent 循环、工具执行、会话模型或持久化，也不创建相应空接口。后续 milestone 按可实际使用的完整能力划分。
+当前交付工程基础与最小 Agent Runtime。CLI 可登录 ChatGPT 并使用套餐额度调用官方 Responses API，按顺序执行明确提供的只读文件工具，完成一次委托或报告失败、取消。页面仍从真实 HTTP API 读取应用信息，尚未接入 Agent 执行。会话模型、持久化和完整产品交互留到后续阶段；运行机制与验收见 [Runtime](runtime.md)。
 
 仅支持 macOS 与 Linux，永不支持 Windows。采用 MIT 许可证。
 
@@ -15,23 +15,27 @@ Rig 是本地运行、面向个人使用的 Agent harness。CLI 承担启动和�
 | `src/application.rs` | 与 HTTP、UI 无关的应用信息展示数据 |
 | `src/http.rs` | HTTP 路由、传输数据转换与静态文件服务 |
 | `src/main.rs` | CLI 参数、运行时与监听器的组装 |
+| `src/runtime.rs` | 与 HTTP、UI 无关的单次 Agent Loop、模型与工具调用契约 |
+| `src/chatgpt_auth/` | ChatGPT OAuth 登录、凭据保存、刷新及退出 |
+| `src/chatgpt.rs` | 官方 Responses API、流式结果与核心消息之间的转换 |
+| `src/tools.rs` | 明确提供的文件范围及只读工具执行 |
 | `web/src/application/model.ts` | 应用信息类型与客户端状态 |
 | `web/src/application/api.ts` | HTTP 应用信息读取 |
 | `web/src/application/store.ts` | 不依赖 React 的客户端状态与订阅 |
 | `web/src/ui/App.tsx` | 通过 React `useSyncExternalStore` 订阅并渲染状态 |
 | `web/src/main.tsx` | 创建客户端状态实例、触发首次读取并挂载 UI |
-| `scripts/` 与 `.github/workflows/` | 本地工程检查与 CI |
+| `scripts/` | 本地工程检查 |
 | `docs/` | 当前有效设计和开发规范 |
 
 Rust 使用 Tokio 与 Axum：Tokio 提供异步运行时，Axum 将 HTTP 请求映射到应用能力。采用一个 Cargo package，减少早期 crate 间接口与发布管理成本；有实际独立复用或发布需求后再考虑拆分。
 
-`src/lib.rs` 暴露应用模块与服务入口；CLI binary 和 library 位于同一 Cargo package。当前没有独立的 Agent 内核模块，应用信息读取不需要预建执行抽象。
+`src/lib.rs` 暴露应用、HTTP 与 Runtime 等模块；CLI binary 和 library 位于同一 Cargo package。Agent 内核可以独立测试和使用，不依赖本地 HTTP 服务或前端资源。ChatGPT 通过 reqwest 直接接入官方 OAuth 与 Responses API，JSON 转换使用 serde_json；不运行 Codex 子进程或依赖 DevKit。登录凭据独立保存，不属于任务记录或会话持久化。
 
 Web 使用 React、TypeScript 与 Vite，便于复用浏览器组件和可视化生态。代价是维护 Rust 和 Node 两套工具链与检查。基础控件可按需采用 shadcn/ui；初始化不绑定 AI 对话运行时、Agent UI 协议或自动生成接口类型的工具。
 
 ## 状态与界面边界
 
-下面是后续功能必须遵守的职责边界，不代表初始化已经实现了会话与执行模块。
+下面是当前及后续功能的职责边界；本版执行模块只服务单次 CLI 委托，尚未实现会话与 Agent 客户端协议。
 
 | 层次 | 拥有的内容 | 约束 |
 | --- | --- | --- |
@@ -66,6 +70,6 @@ GET /api/info
 
 ## 后续设计确认点
 
-首个完整 Agent 能力阶段再设计模型接入、执行状态、工具与权限、会话持久化和流式通信。用真实流程验证 UI 选型：发送任务、流式输出、工具执行、等待用户操作、展示结果，并检验刷新与取消行为。
+最小 Runtime 先验证模型与工具循环。接入完整 Agent 产品交互时，再确认会话、权限与审批、持久化及流式通信的范围。用真实流程验证 UI 选型：发送任务、流式输出、工具执行、等待用户操作、展示结果，并检验刷新与取消行为。
 
 AI SDK UI、assistant-ui、AG-UI 等候选方案需根据该流程评估适配成本；富交互结果如图表、表格、表单，以及 MCP Apps 或声明式 UI 的渲染与信任边界，在相关能力阶段讨论。当前不引入插件系统、后台常驻服务或通用工作流引擎。
