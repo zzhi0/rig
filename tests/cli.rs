@@ -11,6 +11,9 @@ fn root_help_exposes_the_commands() {
     let help = String::from_utf8(output.stdout).unwrap();
     assert!(help.contains("serve"));
     assert!(help.contains("run"));
+    assert!(help.contains("login"));
+    assert!(help.contains("logout"));
+    assert!(help.contains("models"));
     assert!(help.contains("--version"));
 }
 
@@ -21,39 +24,57 @@ fn run_help_explains_model_and_explicit_file_selection() {
     let help = String::from_utf8(output.stdout).unwrap();
     assert!(help.contains("--model"));
     assert!(help.contains("--read"));
-    assert!(help.contains("deepseek-flash"));
+    assert!(help.contains("rig models"));
 }
 
 #[test]
-fn run_without_credentials_fails_before_calling_the_model() {
-    let output = rig()
-        .args(["run", "hello"])
-        .env_remove("DEEPSEEK_API_KEY")
-        .output()
-        .unwrap();
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    assert!(
-        String::from_utf8(output.stderr)
-            .unwrap()
-            .contains("DEEPSEEK_API_KEY")
-    );
+fn account_commands_without_credentials_do_not_use_ambient_keys() {
+    let directory = tempfile::tempdir().unwrap();
+    for args in [
+        vec!["run", "hello", "--model", "test-model"],
+        vec!["models"],
+    ] {
+        let output = rig()
+            .args(args)
+            .env("HOME", directory.path())
+            .env_remove("XDG_CONFIG_HOME")
+            .env("OPENAI_API_KEY", "unused-api-key")
+            .env("DEEPSEEK_API_KEY", "unused-deepseek-key")
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(error.contains("rig login"), "{error}");
+        assert!(!error.contains("unused-"));
+    }
 }
 
 #[test]
-fn invalid_file_selection_fails_before_calling_the_model() {
+fn invalid_file_selection_fails_before_authentication() {
     let directory = tempfile::tempdir().unwrap();
     let output = rig()
-        .args(["run", "read my file", "--read"])
+        .args(["run", "read my file", "--model", "test-model", "--read"])
         .arg(directory.path().join("missing.txt"))
-        .env("DEEPSEEK_API_KEY", "test-key")
+        .env("HOME", directory.path())
+        .env_remove("XDG_CONFIG_HOME")
         .output()
         .unwrap();
     assert!(!output.status.success());
     let error = String::from_utf8(output.stderr).unwrap();
     assert!(error.contains("missing.txt"));
-    assert!(!error.contains("Calling DeepSeek"));
-    assert!(!error.contains("test-key"));
+    assert!(!error.contains("Calling ChatGPT"));
+}
+
+#[test]
+fn run_requires_an_explicit_account_model() {
+    let output = rig().args(["run", "hello"]).output().unwrap();
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("--model")
+    );
 }
 
 #[test]

@@ -31,9 +31,9 @@
 
 ## Runtime 验收
 
-机制与当前范围见 [Runtime](runtime.md)。`cargo test --all-targets --locked` 包含确定性 Loop 测试、本地 HTTP 模型适配测试、真实临时文件工具测试及 CLI 测试，无需 key 或外网；前端仍按现有工程验收。
+机制与当前范围见 [Runtime](runtime.md)。`cargo test --all-targets --locked` 包含确定性 Loop 测试、合成 OAuth 凭据与本地 HTTP 模型适配测试、真实临时文件工具测试及 CLI 测试，无需账号、凭据或外网；前端仍按现有工程验收。
 
-真实模型验证按 [README](../README.md) 配置仓库外的 key：先检查无工具的回答，再明确要求使用 `read_file` 读取一个提供的文件，确认 stderr 出现工具进展、最终答案使用文件内容。用 Ctrl-C 确认取消及退出码 `130`。不要把 key、真实请求日志或临时输入文件提交到仓库。
+真实模型验证按 [README](../README.md) 登录 ChatGPT 并选择账户可用的模型：先检查无工具的回答，再明确要求使用 `read_file` 读取一个提供的文件，确认 stderr 出现工具进展、最终答案使用文件内容。用 Ctrl-C 确认取消及退出码 `130`。登录需要维护者在浏览器完成授权；离线测试不能证明真实账号的授权或模型可用性。不要把 token、真实请求日志或临时输入文件提交到仓库。
 
 ## 初始化验收
 

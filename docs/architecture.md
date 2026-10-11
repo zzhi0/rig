@@ -4,7 +4,7 @@
 
 Rig 是本地运行、面向个人使用的 Agent harness。CLI 承担启动和管理，Web UI 是首个完整交互入口。首批用户偏开发者，但内核保持任务中立，不内置编程任务的假设；通用个人任务与开发任务的工具组合、profile 或 mode，在真实需求出现后设计。
 
-当前交付工程基础与最小 Agent Runtime。CLI 可调用 DeepSeek 官方 API，按顺序执行明确提供的只读文件工具，完成一次委托或报告失败、取消。页面仍从真实 HTTP API 读取应用信息，尚未接入 Agent 执行。会话模型、持久化和完整产品交互留到后续阶段；运行机制与验收见 [Runtime](runtime.md)。
+当前交付工程基础与最小 Agent Runtime。CLI 可登录 ChatGPT 并使用套餐额度调用官方 Responses API，按顺序执行明确提供的只读文件工具，完成一次委托或报告失败、取消。页面仍从真实 HTTP API 读取应用信息，尚未接入 Agent 执行。会话模型、持久化和完整产品交互留到后续阶段；运行机制与验收见 [Runtime](runtime.md)。
 
 仅支持 macOS 与 Linux，永不支持 Windows。采用 MIT 许可证。
 
@@ -16,7 +16,8 @@ Rig 是本地运行、面向个人使用的 Agent harness。CLI 承担启动和�
 | `src/http.rs` | HTTP 路由、传输数据转换与静态文件服务 |
 | `src/main.rs` | CLI 参数、运行时与监听器的组装 |
 | `src/runtime.rs` | 与 HTTP、UI 无关的单次 Agent Loop、模型与工具调用契约 |
-| `src/deepseek.rs` | DeepSeek 官方 API 请求与核心消息之间的转换 |
+| `src/chatgpt_auth/` | ChatGPT OAuth 登录、凭据保存、刷新及退出 |
+| `src/chatgpt.rs` | 官方 Responses API、流式结果与核心消息之间的转换 |
 | `src/tools.rs` | 明确提供的文件范围及只读工具执行 |
 | `web/src/application/model.ts` | 应用信息类型与客户端状态 |
 | `web/src/application/api.ts` | HTTP 应用信息读取 |
@@ -28,7 +29,7 @@ Rig 是本地运行、面向个人使用的 Agent harness。CLI 承担启动和�
 
 Rust 使用 Tokio 与 Axum：Tokio 提供异步运行时，Axum 将 HTTP 请求映射到应用能力。采用一个 Cargo package，减少早期 crate 间接口与发布管理成本；有实际独立复用或发布需求后再考虑拆分。
 
-`src/lib.rs` 暴露应用、HTTP 与 Runtime 等模块；CLI binary 和 library 位于同一 Cargo package。Agent 内核可以独立测试和使用，不依赖本地 HTTP 服务或前端资源。DeepSeek 通过 reqwest 直接接入官方 HTTP API，JSON 转换使用 serde_json。
+`src/lib.rs` 暴露应用、HTTP 与 Runtime 等模块；CLI binary 和 library 位于同一 Cargo package。Agent 内核可以独立测试和使用，不依赖本地 HTTP 服务或前端资源。ChatGPT 通过 reqwest 直接接入官方 OAuth 与 Responses API，JSON 转换使用 serde_json；不运行 Codex 子进程或依赖 DevKit。登录凭据独立保存，不属于任务记录或会话持久化。
 
 Web 使用 React、TypeScript 与 Vite，便于复用浏览器组件和可视化生态。代价是维护 Rust 和 Node 两套工具链与检查。基础控件可按需采用 shadcn/ui；初始化不绑定 AI 对话运行时、Agent UI 协议或自动生成接口类型的工具。
 

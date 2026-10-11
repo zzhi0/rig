@@ -420,3 +420,44 @@ async fn cancellation_after_one_tool_keeps_its_result_and_starts_no_more_work() 
         }))
     );
 }
+
+#[tokio::test]
+async fn preserves_opaque_model_continuation_across_tool_execution() {
+    struct StatefulModel;
+
+    impl Model for StatefulModel {
+        type Continuation = Vec<String>;
+
+        async fn complete(
+            &self,
+            messages: &[Message<Self::Continuation>],
+            _: &[ToolDefinition],
+        ) -> Result<AssistantMessage<Self::Continuation>, String> {
+            if messages.len() == 1 {
+                return Ok(AssistantMessage {
+                    content: None,
+                    tool_calls: vec![call("first", "{}")],
+                    continuation: vec!["opaque model context".into()],
+                });
+            }
+            let Message::Assistant(previous) = &messages[1] else {
+                panic!("expected the preceding model response");
+            };
+            assert_eq!(previous.continuation, ["opaque model context"]);
+            assert!(matches!(&messages[2], Message::Tool(result) if result.call_id == "first"));
+            Ok(AssistantMessage {
+                content: Some("done".into()),
+                tool_calls: Vec::new(),
+                continuation: vec!["final model context".into()],
+            })
+        }
+    }
+
+    let tools = ScriptedTools::new(vec![Ok("tool result".into())]);
+    let report = run(&StatefulModel, &tools, "hello".into(), pending(), |_| {}).await;
+    assert_eq!(report.outcome, RunOutcome::Completed("done".into()));
+    assert!(
+        matches!(report.context.last(), Some(Message::Assistant(response))
+        if response.continuation == ["final model context"])
+    );
+}
